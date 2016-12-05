@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-dark.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+
+    <title>Logging by EsOsO</title>
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <h1>Logging</h1>
+        <h2>Powershell Logging Module</h2>
+
+        <section id="downloads">
+          <a href="https://github.com/EsOsO/Logging/zipball/master" class="btn">Download as .zip</a>
+          <a href="https://github.com/EsOsO/Logging/tarball/master" class="btn">Download as .tar.gz</a>
+          <a href="https://github.com/EsOsO/Logging" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h1>
+<a id="powershell-logging-module" class="anchor" href="#powershell-logging-module" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Powershell Logging Module</h1>
+
+<h2>
+<a id="features" class="anchor" href="#features" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Features</h2>
+
+<ul>
+<li>Separate thread that dispatch messages to targets to avoid bottleneck in the main script</li>
+<li>Extensible with new targets</li>
+<li>Custom formatting</li>
+<li>Each target can have his own logging level</li>
+</ul>
+
+<h2>
+<a id="tldr" class="anchor" href="#tldr" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TL;DR</h2>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-c1">Set-LoggingDefaultLevel</span> <span class="pl-k">-</span>Level <span class="pl-s">'WARNING'</span>
+<span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name Console
+<span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name File <span class="pl-k">-</span>Configuration @{Path <span class="pl-k">=</span> <span class="pl-s">'C:\Temp\example_%{+%Y%m%d}.log'</span>}
+
+<span class="pl-k">$</span><span class="pl-smi">Level</span> <span class="pl-k">=</span> <span class="pl-s">'DEBUG'</span><span class="pl-k">,</span> <span class="pl-s">'INFO'</span><span class="pl-k">,</span> <span class="pl-s">'WARNING'</span><span class="pl-k">,</span> <span class="pl-s">'ERROR'</span>
+<span class="pl-k">foreach</span> <span class="pl-k">(</span><span class="pl-k">$</span><span class="pl-smi">i</span> <span class="pl-k">in</span> <span class="pl-c1"><span class="pl-c1">1</span></span><span class="pl-k">..</span><span class="pl-c1"><span class="pl-c1">100</span></span><span class="pl-k">)</span> {
+    <span class="pl-c1">Write-Log</span> <span class="pl-k">-</span>Level <span class="pl-k">(</span><span class="pl-k">$</span><span class="pl-smi">Level</span> <span class="pl-k">|</span> <span class="pl-c1">Get-Random</span><span class="pl-k">)</span> <span class="pl-k">(</span><span class="pl-s">'Message n.{0}'</span> <span class="pl-k">-f</span> <span class="pl-k">$</span><span class="pl-smi">i</span><span class="pl-k">)</span>
+    <span class="pl-c1">Start-Sleep</span> <span class="pl-k">-</span>Milliseconds <span class="pl-k">(</span><span class="pl-c1">Get-Random</span> <span class="pl-k">-</span>Min <span class="pl-c1"><span class="pl-c1">100</span></span> <span class="pl-k">-</span>Max <span class="pl-c1"><span class="pl-c1">1000</span></span><span class="pl-k">)</span>
+}
+
+<span class="pl-c1">Wait-Logging</span>        <span class="pl-c"># See Note</span></pre></div>
+
+<h3>
+<a id="note" class="anchor" href="#note" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>NOTE</h3>
+
+<p>When used in <em>unattended</em> scripts (scheduled tasks, spawned process) you need to call Wait-Logging to avoid losing messages. If you run your main script in an interactive shell that stays open at the end of the execution you could avoid using it (keep in mind that if there are messeages in the queue when you close the shell, you'll lose it)</p>
+
+<h2>
+<a id="configuration" class="anchor" href="#configuration" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Configuration</h2>
+
+<p>The following section describe how to configure the Logging module.</p>
+
+<ul>
+<li>Level</li>
+<li>Format</li>
+<li>Targets</li>
+<li>CustomTargets</li>
+</ul>
+
+<h4>
+<a id="level" class="anchor" href="#level" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Level</h4>
+
+<p>The <em>Level</em> property defines the default logging level.
+Valid values are:</p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">*</span> NOTSET    <span class="pl-k">(</span> <span class="pl-c1"><span class="pl-c1">0</span></span><span class="pl-k">)</span>
+<span class="pl-k">*</span> DEBUG     <span class="pl-k">(</span><span class="pl-c1"><span class="pl-c1">10</span></span><span class="pl-k">)</span>
+<span class="pl-k">*</span> INFO      <span class="pl-k">(</span><span class="pl-c1"><span class="pl-c1">20</span></span><span class="pl-k">)</span>
+<span class="pl-k">*</span> WARNING   <span class="pl-k">(</span><span class="pl-c1"><span class="pl-c1">30</span></span><span class="pl-k">)</span>
+<span class="pl-k">*</span> ERROR     <span class="pl-k">(</span><span class="pl-c1"><span class="pl-c1">40</span></span><span class="pl-k">)</span></pre></div>
+
+<p>For example:</p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Get-LoggingDefaultLevel</span>                       <span class="pl-c"># Get the default value</span>
+NOTSET                                          <span class="pl-c"># NOTSET level</span>
+<span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingDefaultLevel</span> <span class="pl-k">-</span>Level <span class="pl-s">'ERROR'</span>        <span class="pl-c"># Set default level to ERROR</span>
+<span class="pl-k">&gt;</span> <span class="pl-c1">Get-LoggingDefaultLevel</span>                       <span class="pl-c"># Get the current global level</span>
+ERROR</pre></div>
+
+<h4>
+<a id="format" class="anchor" href="#format" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Format</h4>
+
+<p>The <em>Format</em> property defines how the message is rendered.</p>
+
+<p>The default value is: <code>[%{timestamp}] [%{level:-7}] %{message}</code></p>
+
+<p>The Log object has a number of attributes that are replaced in the format string to produce the message:</p>
+
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>%{timestamp}</code></td>
+<td>Time when the log message was created. Defaults to <code>%Y-%m-%d %T%Z</code> (<em>2016-04-20 14:22:45+02</em>). Take a look at the <a href="https://technet.microsoft.com/en-us/library/hh849887.aspx#sectionSection7">Technet article</a> about the UFormat parameter</td>
+</tr>
+<tr>
+<td><code>%{level}</code></td>
+<td>Text logging level for the message (<em>DEBUG</em>, <em>INFO</em>, <em>WARNING</em>, <em>ERROR</em>)</td>
+</tr>
+<tr>
+<td><code>%{levelno}</code></td>
+<td>Number logging level for the message (<em>10</em>, <em>20</em>, <em>30</em>, <em>40</em>)</td>
+</tr>
+<tr>
+<td><code>%{message}</code></td>
+<td>The logged message</td>
+</tr>
+<tr>
+<td><code>%{body}</code></td>
+<td>The logged body (json format not pretty printed)</td>
+</tr>
+</tbody>
+</table>
+
+<p>After the placeholder name you can pass a padding or a date format string separated by a colon (<code>:</code>):</p>
+
+<h5>
+<a id="padding" class="anchor" href="#padding" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Padding</h5>
+
+<p>If the padding value is negative, the field will be left aligned and padded with spaces on the right:</p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingDefaultFormat</span> <span class="pl-k">-</span>Format <span class="pl-s">'[%{level:-7}]'</span>
+<span class="pl-e">[DEBUG</span>  <span class="pl-e">]</span>
+<span class="pl-e">[INFO</span>   <span class="pl-e">]</span>
+<span class="pl-e">[WARNING]</span>
+<span class="pl-e">[ERROR</span>  <span class="pl-e">]</span></pre></div>
+
+<p>If the padding value is positive, the field will be right aligned and padded with spaces on the left:</p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingDefaultFormat</span> <span class="pl-k">-</span>Format <span class="pl-s">'[%{level:7}]'</span>
+<span class="pl-e">[</span>  <span class="pl-e">DEBUG]</span>
+<span class="pl-e">[</span>   <span class="pl-e">INFO]</span>
+<span class="pl-e">[WARNING]</span>
+<span class="pl-e">[</span>  <span class="pl-e">ERROR]</span></pre></div>
+
+<h5>
+<a id="date-format-string" class="anchor" href="#date-format-string" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Date format string</h5>
+
+<p>The date format string starts with a plus sign (<code>+</code>) followed by <strong>UFormat</strong> parameters. See <a href="https://technet.microsoft.com/en-us/library/hh849887.aspx#sectionSection7">here</a> for available formats.</p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingDefaultFormat</span> <span class="pl-k">-</span>Format <span class="pl-s">'%{timestamp}'</span>
+<span class="pl-c1"><span class="pl-c1">2016</span></span><span class="pl-k">-</span><span class="pl-c1"><span class="pl-c1">04</span></span><span class="pl-k">-</span><span class="pl-c1"><span class="pl-c1">20</span></span> <span class="pl-c1"><span class="pl-c1">13</span></span>:<span class="pl-c1"><span class="pl-c1">31</span></span>:<span class="pl-c1"><span class="pl-c1">12</span></span><span class="pl-k">+</span><span class="pl-c1"><span class="pl-c1">02</span></span>
+<span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingDefaultFormat</span> <span class="pl-k">-</span>Format <span class="pl-s">'%{timestamp:+%A, %B %d, %Y}'</span>
+Wednesday<span class="pl-k">,</span> April <span class="pl-c1"><span class="pl-c1">20</span></span><span class="pl-k">,</span> <span class="pl-c1"><span class="pl-c1">2016</span></span>
+<span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingDefaultFormat</span> <span class="pl-k">-</span>Format <span class="pl-s">'[%{timestamp:+%T:12}]'</span>   <span class="pl-c"># You could also use padding and date format string at the same time</span>
+<span class="pl-e">[</span>   <span class="pl-c1"><span class="pl-c1">13</span></span>:<span class="pl-c1"><span class="pl-c1">31</span></span>:<span class="pl-c1"><span class="pl-c1">12</span></span><span class="pl-e">]</span></pre></div>
+
+<h3>
+<a id="targets" class="anchor" href="#targets" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Targets</h3>
+
+<p>The <em>Targets</em> property stores the used logging targets, it's where you define where to route your messages.</p>
+
+<p>Keys of the hashtable depends on the target you are configuring. The module ships with 3 targets but you can write your own for specific usage.</p>
+
+<ul>
+<li>Console</li>
+<li>File</li>
+<li>ElasticSearch</li>
+<li>Slack</li>
+</ul>
+
+<h4>
+<a id="console" class="anchor" href="#console" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Console</h4>
+
+<p>From version 2.3.3 it supports acquiring lock for issues with git prompt that sometimes gets splitted during output.
+The mutex name to acquire is <code>ConsoleMtx</code></p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name Console <span class="pl-k">-</span>Configuration @{
+    Level       <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging level for this target</span>
+    Format      <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging format for this target</span>
+}</pre></div>
+
+<h4>
+<a id="file" class="anchor" href="#file" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>File</h4>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name File <span class="pl-k">-</span>Configuration @{
+    Path        <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; Sets the file destination (eg. 'C:\Temp\%{+%Y%m%d}.log') </span>
+                                    <span class="pl-c">#            It supports templating like $Logging.Format </span>
+    PrintBody   <span class="pl-k">=</span> <span class="pl-k">$</span><span class="pl-c1">false</span>            <span class="pl-c"># &lt;Not required&gt; Prints body message too</span>
+    Append      <span class="pl-k">=</span> <span class="pl-k">$</span><span class="pl-c1">true</span>             <span class="pl-c"># &lt;Not required&gt; Append to log file</span>
+    Encoding    <span class="pl-k">=</span> <span class="pl-s">'ascii'</span>           <span class="pl-c"># &lt;Not required&gt; Sets the log file encoding</span>
+    Level       <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging level for this target</span>
+    Format      <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging format for this target</span>
+}</pre></div>
+
+<h4>
+<a id="elasticsearch" class="anchor" href="#elasticsearch" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>ElasticSearch</h4>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name ElasticSearch <span class="pl-k">-</span>Configuration @{
+    ServerName  <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; Sets the ES server name (eg. 'localhost')</span>
+    ServerPort  <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; Sets the ES server port (eg. 9200)</span>
+    Index       <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; Sets the ES index name to log to (eg. 'logs-%{+%Y.%m.%d}')</span>
+                                    <span class="pl-c">#            It supports templating like $Logging.Format         </span>
+    Type        <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; Sets the ES type for the message (eg. 'log')</span>
+    Level       <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging format for this target</span>
+}</pre></div>
+
+<h4>
+<a id="slack" class="anchor" href="#slack" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Slack</h4>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name Slack <span class="pl-k">-</span>Configuration @{
+    ServerURI   <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; Sets the Slack Webhook URI (eg. 'https://hooks.slack.com/services/xxxx/xxxx/xxxxxxxxxx')</span>
+    Channel     <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Overrides the default channel of the Webhook (eg. '@username' or '#other-channel')</span>
+    BotName     <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Overrides the default name of the bot (eg. 'PoshLogging')</span>
+    Level       <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging format for this target</span>
+}</pre></div>
+
+<h3>
+<a id="email" class="anchor" href="#email" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Email</h3>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Add-LoggingTarget</span> <span class="pl-k">-</span>Name Email <span class="pl-k">-</span>Configuration @{
+    SMTPServer  <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; SMTP server FQDN</span>
+    <span class="pl-k">From</span>        <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Required&gt; From address</span>
+    To          <span class="pl-k">=</span> <span class="pl-k">@(</span><span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span><span class="pl-k">)</span>       <span class="pl-c"># &lt;Required&gt; An array of recipients. NB: @() are needed around the value</span>
+    Subject     <span class="pl-k">=</span> <span class="pl-s">'[%{level:-7}] %{message}'</span>    <span class="pl-c"># &lt;Not required&gt; Email subject. Supports formatting and expansion</span>
+    Credential  <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; If your server uses authentication</span>
+    Level       <span class="pl-k">=</span> <span class="pl-k">&lt;</span>NOTSET<span class="pl-k">&gt;</span>          <span class="pl-c"># &lt;Not required&gt; Sets the logging format for this target</span>
+}</pre></div>
+
+<h3>
+<a id="customtargets" class="anchor" href="#customtargets" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>CustomTargets</h3>
+
+<p>It lets define a folder to load custom targets. </p>
+
+<div class="highlight highlight-source-powershell"><pre><span class="pl-k">&gt;</span> <span class="pl-c1">Set-LoggingCustomTargets</span> <span class="pl-k">-</span>Path <span class="pl-s">'C:\temp\'</span>
+<span class="pl-k">&gt;</span> <span class="pl-c1">Get-LoggingTargetAvailable</span>
+Name                           Value
+<span class="pl-k">----</span>                           <span class="pl-k">-----</span>
+Console                        {Configuration<span class="pl-k">,</span> ParamsRequired<span class="pl-k">,</span> Logger}
+ElasticSearch                  {Configuration<span class="pl-k">,</span> ParamsRequired<span class="pl-k">,</span> Logger}
+File                           {Configuration<span class="pl-k">,</span> ParamsRequired<span class="pl-k">,</span> Logger}
+Slack                          {Configuration<span class="pl-k">,</span> ParamsRequired<span class="pl-k">,</span> Logger}
+MyCustomTarget                 {Configuration<span class="pl-k">,</span> ParamsRequired<span class="pl-k">,</span> Logger}</pre></div>
+
+<h2>
+<a id="contributing" class="anchor" href="#contributing" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Contributing</h2>
+
+<p>Please use <a href="https://github.com/EsOsO/Logging/issues">issues</a> system or GitHub pull requests to contribute to the project.</p>
+
+<p>For more information, see <a href="CONTRIBUTING.md">CONTRIBUTING</a></p>
+
+<h2>
+<a id="notes" class="anchor" href="#notes" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Notes</h2>
+
+<ul>
+<li>The dispatcher thread starts the first time a <code>Write-Log</code> command is executed and keeps running in the background to dispatch new messages until the module is removed.</li>
+<li>The runspace code is inspired by the work and research of Boe Prox (<a href="https://github.com/proxb" class="user-mention">@proxb</a>).</li>
+</ul>
+      </section>
+    </div>
+
+    
+  </body>
+</html>
